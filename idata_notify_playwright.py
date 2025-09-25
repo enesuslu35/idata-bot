@@ -1,64 +1,36 @@
-import time
+import os
+import asyncio
+from playwright.async_api import async_playwright
 import requests
-from playwright.sync_api import sync_playwright
 
-URL = "https://it-tr-appointment.idata.com.tr/tr/appointment-form"
-CHECK_INTERVAL = 120  # saniye (2 dk)
+# Telegram token ve chat_id gizli olarak GitHub Secrets'tan alınır
+TELEGRAM_BOT_TOKEN = os.environ["TELEGRAM_BOT_TOKEN"]
+TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
-TELEGRAM_BOT_TOKEN = "8458891629:AAEWlT6XYXYRE_gRtNukKIer8uKMVh7_UeE"
-TELEGRAM_CHAT_ID = "8149792607"
+async def run_bot():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+        
+        # Örnek: İdata sayfasına git
+        await page.goto("https://idata.com.tr")  
 
-def send_telegram(msg):
-    try:
-        requests.get(f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                     params={"chat_id": TELEGRAM_CHAT_ID, "text": msg})
-    except Exception as e:
-        print("Telegram gönderim hatası:", e)
-
-def check_slots():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(URL, timeout=60000)
-
+        # Burada kendi locator / işlem kodunu yaz
         try:
-            # Şehir seç
-            page.wait_for_selector("select#city", timeout=60000)
-            page.select_option("select#city", label="İzmir")
-
-            # Ofis seç
-            page.wait_for_selector("select#office", timeout=60000)
-            page.select_option("select#office", label="İzmir Ofis")
-
-            # Başvuru türü seç
-            page.wait_for_selector("select#getapplicationtype", timeout=60000)
-            page.select_option("select#getapplicationtype", label="Turistik")
-
-            # Servis tipi seç
-            page.wait_for_selector("select#officetype", timeout=60000)
-            page.select_option("select#officetype", label="STANDART")
-
-            # Kişi sayısı seç
-            page.wait_for_selector("select#totalPerson", timeout=60000)
-            page.select_option("select#totalPerson", label="2 Kişi")
-
-            time.sleep(5)  # Sayfanın güncellenmesi için bekle
-
-            # Uyarı yazısını kontrol et
-            text = page.inner_text("body")
-            if "Uygun randevu tarihi bulunmamaktadır" not in text:
-                send_telegram("İzmir İtalya için RANDEVU açıldı! 🚨")
-                print("Randevu bulundu, Telegram'a mesaj gönderildi.")
-            else:
-                print("Henüz randevu yok.")
-
+            await page.wait_for_selector("#city", timeout=10000)
+            message = "İdata bot başarılı şekilde çalıştı ✅"
         except Exception as e:
-            print("Form doldurulamadı:", e)
+            message = f"Hata oluştu ❌: {e}"
 
-        browser.close()
+        # Telegram'a mesaj gönder
+        send_message(message)
+
+        await browser.close()
+
+def send_message(text):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    data = {"chat_id": TELEGRAM_CHAT_ID, "text": text}
+    requests.post(url, data=data)
 
 if __name__ == "__main__":
-    print("İdata randevu takibi başladı...")
-    while True:
-        check_slots()
-        time.sleep(CHECK_INTERVAL)
+    asyncio.run(run_bot())
