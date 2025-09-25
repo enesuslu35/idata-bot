@@ -1,39 +1,34 @@
-import asyncio
-from playwright.async_api import async_playwright
-from aiogram import Bot, Dispatcher
 import os
+import time
+import requests
+from bs4 import BeautifulSoup
 
-# Telegram bot bilgileri
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # GitHub Secrets'ten alınacak
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")      # GitHub Secrets'ten alınacak
+URL = "https://online.idata.com.tr/randevu/italya/izmir"
+CHECK_INTERVAL = 120
 
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
+# Token ve Chat ID'yi ortam değişkenlerinden al
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-async def run_bot():
+def send_telegram(msg):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": msg}
+    requests.post(url, data=payload, timeout=10)
+
+def check_slots():
     try:
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
-
-            # Siteye git
-            await page.goto("https://it-tr-appointment.idata.com.tr/tr/appointment-form", timeout=60000)
-            await bot.send_message(CHAT_ID, "🌍 Sayfa açıldı!")
-
-            # Şehir seçimi (otomatik İzmir)
-            try:
-                await page.wait_for_selector("select[name='city']", timeout=60000)
-                await page.select_option("select[name='city']", label="İzmir")
-                await bot.send_message(CHAT_ID, "✅ Şehir otomatik seçildi: İzmir")
-            except Exception as e:
-                await bot.send_message(CHAT_ID, f"❌ Şehir seçilemedi: {e}")
-
-            # Burada diğer adımlar eklenecek...
-
-            await browser.close()
-
+        r = requests.get(URL, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+        r.raise_for_status()
+        if "Randevu yok" in r.text:
+            return False
+        return True
     except Exception as e:
-        await bot.send_message(CHAT_ID, f"🚨 Genel hata: {e}")
+        print("Hata:", e)
+        return False
 
 if __name__ == "__main__":
-    asyncio.run(run_bot())
+    print("İdata randevu takibi başladı...")
+    while True:
+        if check_slots():
+            send_telegram("📢 İzmir İtalya vizesi için İdata randevusu açıldı!")
+        time.sleep(CHECK_INTERVAL)
