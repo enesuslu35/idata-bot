@@ -1,38 +1,39 @@
-import os
 import asyncio
 from playwright.async_api import async_playwright
-import requests
+from aiogram import Bot, Dispatcher
+import os
 
-# Telegram ayarları
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+# Telegram bot bilgileri
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")  # GitHub Secrets'ten alınacak
+CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")      # GitHub Secrets'ten alınacak
 
-async def send_telegram_message(message: str):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
-    try:
-        requests.post(url, data=payload)
-    except Exception as e:
-        print(f"Telegram mesaj hatası: {e}")
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
 
 async def run_bot():
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
 
-        try:
-            await page.goto("https://it-tr-appointment.idata.com.tr/tr/appointment-form")
-            await page.wait_for_load_state("networkidle")  # Sayfa yüklenmesini bekle
+            # Siteye git
+            await page.goto("https://it-tr-appointment.idata.com.tr/tr/appointment-form", timeout=60000)
+            await bot.send_message(CHAT_ID, "🌍 Sayfa açıldı!")
 
-            # Şehir dropdown'unu bekle
-            await page.wait_for_selector("select[name='city']", timeout=30000)
-            await send_telegram_message("✅ Sayfa başarıyla yüklendi ve şehir seçici bulundu!")
+            # Şehir seçimi (otomatik İzmir)
+            try:
+                await page.wait_for_selector("select[name='city']", timeout=60000)
+                await page.select_option("select[name='city']", label="İzmir")
+                await bot.send_message(CHAT_ID, "✅ Şehir otomatik seçildi: İzmir")
+            except Exception as e:
+                await bot.send_message(CHAT_ID, f"❌ Şehir seçilemedi: {e}")
 
-        except Exception as e:
-            await send_telegram_message(f"Hata oluştu ❌: {e}")
+            # Burada diğer adımlar eklenecek...
 
-        finally:
             await browser.close()
+
+    except Exception as e:
+        await bot.send_message(CHAT_ID, f"🚨 Genel hata: {e}")
 
 if __name__ == "__main__":
     asyncio.run(run_bot())
