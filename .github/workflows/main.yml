@@ -1,9 +1,9 @@
 name: Idata Bot Runner
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: "*/10 * * * *"   # Her 10 dakikada bir çalışır
-  workflow_dispatch:          # Manuel çalıştırma
+    - cron: "0 * * * *"  # Her saat başı çalıştırmak için (istersen değiştirebilirsin)
 
 jobs:
   run-bot:
@@ -20,12 +20,16 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install playwright requests
-          playwright install chromium
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Playwright Browsers
+        run: |
+          playwright install --with-deps
 
       - name: Run bot
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python idata_notify_playwright.py
-
+          BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+          CHAT_ID: ${{ secrets.CHAT_ID }}
+        run: |
+          python idata_notify_playwright.py
